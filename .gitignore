@@ -1,0 +1,62 @@
+# Data directories - ignore contents but keep directories
+data/raw/*
+data/interim/*
+data/processed/*
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
+
+# Models - ignore contents but keep directory
+models/*
+!models/.gitkeep
+
+# Submissions - ignore contents but keep directory
+submissions/*
+!submissions/.gitkeep
+
+# Reports/Figures - ignore contents but keep directory
+reports/figures/*
+!reports/figures/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Environment files
+.env
+.venv
+env/
+venv/
+kaggle.json
+.kaggle/
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+

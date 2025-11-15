@@ -1,0 +1,43 @@
+name: comp432-project
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - scikit-learn
+  - matplotlib
+  - seaborn
+  - jupyter
+  - ipykernel
+  - kaggle
+
+  # PyTorch and GPU Support
+  # IMPORTANT: Install PyTorch manually after creating the environment
+  # Check your NVIDIA driver version: nvidia-smi
+  # CUDA drivers are backward compatible - if your driver supports CUDA 13.0,
+  # you can use pytorch-cuda=12.4 or 12.1 (latest stable versions)
+  #
+  # For CUDA 12.4 (Latest Stable - Recommended):
+  #   conda install pytorch torchvision pytorch-cuda=12.4 -c pytorch -c nvidia
+  #
+  # For CUDA 12.1:
+  #   conda install pytorch torchvision pytorch-cuda=12.1 -c pytorch -c nvidia
+  #
+  # For CUDA 11.8:
+  #   conda install pytorch torchvision pytorch-cuda=11.8 -c pytorch -c nvidia
+  #
+  # For CUDA 13.0 (Nightly builds only):
+  #   conda install pytorch torchvision pytorch-cuda=13.0 -c pytorch-nightly -c nvidia
+  #
+  # For CPU-only (no GPU):
+  #   conda install pytorch torchvision -c pytorch
+  #
+  # Verify GPU is working:
+  #   python -c "import torch; print(torch.cuda.is_available())"
+  #
+  # - pytorch
+  # - torchvision
+  # - pytorch-cuda=12.4  # Uncomment and adjust version based on your system
+
