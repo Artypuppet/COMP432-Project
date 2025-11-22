@@ -1,0 +1,24 @@
+{
+    "input_size": 500,
+    "hidden_sizes": [
+        2048,
+        1024,
+        512,
+        256,
+        128
+    ],
+    "output_size": 50,
+    "activation": "relu",
+    "dropout_rate": 0.2,
+    "use_batch_norm": true,
+    "learning_rate": 0.001,
+    "batch_size": 1024,
+    "num_epochs": 60,
+    "weight_decay": 1e-3,
+    "optimizer": "adam",
+    "data_dir": "raw",
+    "model_dir": "../models",
+    "train_file": "train.csv",
+    "validation_split": 0.3,
+    "random_seed": 23
+}
