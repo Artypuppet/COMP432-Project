@@ -90,7 +90,7 @@ class MLP(nn.Module):
             
             activation_fn = {
                 "relu": nn.ReLU(),
-                "leaky_relu": nn.LeakyReLU(),
+                "leaky_relu": nn.LeakyReLU(negative_slope=0.1),
                 "gelu": nn.GELU(),
             }[self.config.activation]
             
@@ -144,6 +144,12 @@ class MLPTrainer:
                 lr=config.learning_rate,
                 weight_decay=config.weight_decay
             )
+        elif config.optimizer == "adamw":
+            self.optimizer = torch.optim.AdamW(
+                self.model.parameters(),
+                lr=config.learning_rate,
+                weight_decay=config.weight_decay
+            )
         else:
             raise ValueError(f"Invalid optimizer: {config.optimizer}")
         
@@ -158,7 +164,6 @@ class MLPTrainer:
     def setup_dataloaders(self, X: np.ndarray, y: np.ndarray):
         '''Sets up the dataloaders for the training and validation'''
         # Need to fix this so that we are scaling the data before we split it into train and validation.
-        X = StandardScaler().fit_transform(X)
         X_tensor = torch.tensor(X, dtype=torch.float32).to(self.device)
         y_tensor = torch.tensor(y, dtype=torch.long).to(self.device)
         
@@ -173,6 +178,30 @@ class MLPTrainer:
             [train_size, val_size],
             generator=generator
         )
+        
+        # We need to scale the data after we splitting it into train and validation since
+        # the mean and standard deviation of the train and validation sets will be different.
+        # Extract train data for fitting scaler
+        train_indices = train_dataset.indices
+        X_train = X[train_indices]
+        
+        # Fit scaler ONLY on training data
+        self.scaler = StandardScaler()
+        X_train_scaled = self.scaler.fit_transform(X_train)
+        
+        # Transform validation data using training statistics
+        val_indices = val_dataset.indices
+        X_val = X[val_indices]
+        X_val_scaled = self.scaler.transform(X_val)
+        
+        # Create new datasets with scaled data
+        X_train_tensor = torch.tensor(X_train_scaled, dtype=torch.float32).to(self.device)
+        y_train_tensor = torch.tensor(y[train_indices], dtype=torch.long).to(self.device)
+        X_val_tensor = torch.tensor(X_val_scaled, dtype=torch.float32).to(self.device)
+        y_val_tensor = torch.tensor(y[val_indices], dtype=torch.long).to(self.device)
+        
+        train_dataset = torch.utils.data.TensorDataset(X_train_tensor, y_train_tensor)
+        val_dataset = torch.utils.data.TensorDataset(X_val_tensor, y_val_tensor)
         
         self.train_loader = torch.utils.data.DataLoader(
             train_dataset,
@@ -312,6 +341,7 @@ class MLPTrainer:
                 best_loss = val_stats['loss']
                 best_model_path = f"{self.config.model_dir}/mlp_model_best.pth"
                 self.model.save_model(best_model_path)
+                num_increasing_loss_epochs = 0
             else:
                 num_increasing_loss_epochs += 1
                 if num_increasing_loss_epochs > 5:
