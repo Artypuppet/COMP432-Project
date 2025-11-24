@@ -9,7 +9,6 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, Normalizer
 import matplotlib.pyplot as plt
 import seaborn as sns
-from data_loader import load_test_data
 @dataclass
 class MLPConfig:
     # Model architecture
@@ -42,7 +41,7 @@ class MLPConfig:
     def load_from_config(cls, config_path: str) -> "MLPConfig":
         ''' Loads a MLPConfig from a JSON file.
         Args:
-            config_path: The path to the JSON file. Should be relative to the project root.
+            config_path: The path to the JSON file. Should be relative to the current working directory
             Ideally should be in the configs/ directory.
         Returns:
             A MLPConfig object.
@@ -165,6 +164,12 @@ class MLPTrainer:
         else:
             raise ValueError(f"Invalid optimizer: {config.optimizer}")
         
+        self.scaler = {
+            'standard': StandardScaler(),
+            'minmax': MinMaxScaler(),
+            'l2': Normalizer(norm='l2')
+        }[self.config.scaler]
+        
         self.criterion = nn.CrossEntropyLoss(label_smoothing=config.label_smoothing)
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             self.optimizer,
@@ -203,12 +208,6 @@ class MLPTrainer:
         X_train = X[train_indices]
         
         # Fit scaler ONLY on training data
-        self.scaler = {
-            'standard': StandardScaler(),
-            'minmax': MinMaxScaler(),
-            'l2': Normalizer(norm='l2')
-        }[self.config.scaler]
-        
         X_train_scaled = self.scaler.fit_transform(X_train)
         
         # Transform validation data using training statistics
@@ -238,12 +237,6 @@ class MLPTrainer:
     
     def setup_full_dataloader(self, X: np.ndarray, y: np.ndarray):
         '''Sets up a dataloader for the entire dataset (no train/val split).'''
-        # Scale the entire dataset
-        self.scaler = {
-            'standard': StandardScaler(),
-            'minmax': MinMaxScaler(),
-            'l2': Normalizer(norm='l2')
-        }[self.config.scaler]
         
         X_scaled = self.scaler.fit_transform(X)
         
@@ -262,6 +255,31 @@ class MLPTrainer:
         
         # No validation loader needed
         self.val_loader = None
+        
+    def setup_already_split_dataloader(self, X_train: np.ndarray, y_train: np.ndarray, X_val: np.ndarray, y_val: np.ndarray):
+        '''Sets up a dataloader for the already split train and validation data.'''
+        
+        X_train_scaled = self.scaler.fit_transform(X_train)
+        X_val_scaled = self.scaler.transform(X_val)
+        
+        X_train_tensor = torch.tensor(X_train_scaled, dtype=torch.float32).to(self.device)
+        y_train_tensor = torch.tensor(y_train, dtype=torch.long).to(self.device)
+        X_val_tensor = torch.tensor(X_val_scaled, dtype=torch.float32).to(self.device)
+        y_val_tensor = torch.tensor(y_val, dtype=torch.long).to(self.device)
+        
+        train_dataset = torch.utils.data.TensorDataset(X_train_tensor, y_train_tensor)
+        val_dataset = torch.utils.data.TensorDataset(X_val_tensor, y_val_tensor)
+        
+        self.train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            batch_size=self.config.batch_size,
+            shuffle=True
+        )
+        self.val_loader = torch.utils.data.DataLoader(
+            val_dataset,
+            batch_size=self.config.batch_size,
+            shuffle=False
+        )
         
     def train_epoch(self) -> Dict[str, float]:
         '''Trains the model for one epoch.'''
@@ -385,6 +403,7 @@ class MLPTrainer:
         '''Trains the model on the training data.'''
         
         best_loss = float('inf')
+        best_epoch = 0
         
         best_model_path = ""
         
@@ -412,6 +431,7 @@ class MLPTrainer:
             if val_stats['loss'] < best_loss:
                 print(f"New best loss: {val_stats['loss']:.4f}")
                 best_loss = val_stats['loss']
+                best_epoch = epoch
                 best_model_path = f"{self.config.model_dir}/mlp_model_best.pth"
                 self.model.save_model(best_model_path)
                 best_val_preds = val_preds
@@ -431,7 +451,7 @@ class MLPTrainer:
         
         MLPTrainer.plot_stats(train_stats_lists, val_stats_lists)
         self.plot_confusion_matrix(best_val_preds, best_val_targets)
-        return train_stats_lists, val_stats_lists, best_model_path
+        return train_stats_lists, val_stats_lists, best_model_path, best_epoch
         
     def train_full_dataset(self, num_epochs: int) -> str:
         '''Trains the model on the entire dataset for a specified number of epochs.
