@@ -4,11 +4,12 @@ import json
 import numpy as np
 import torch
 import torch.nn as nn
-from sklearn.metrics import precision_recall_fscore_support
+from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, Normalizer
 import matplotlib.pyplot as plt
-
+import seaborn as sns
+from data_loader import load_test_data
 @dataclass
 class MLPConfig:
     # Model architecture
@@ -18,7 +19,9 @@ class MLPConfig:
     activation: str = "relu"  # "relu", "leaky_relu", "gelu"
     dropout_rate: float = 0.2
     use_batch_norm: bool = True
-    
+    use_layer_norm: bool = False
+    label_smoothing: float = 0.0
+    max_increasing_loss_epochs: int = 5
     # Training parameters
     learning_rate: float = 0.001
     batch_size: int = 64
@@ -32,6 +35,9 @@ class MLPConfig:
     validation_split: float = 0.2
     random_seed: int = 42
     model_dir: str = "../models"
+    scaler: str = 'standard'  # 'standard', 'minmax' or 'l2'
+    test_file: str = "test.csv"
+    test_predictions_file: str = "../submissions/test_predictions.csv"
     @classmethod
     def load_from_config(cls, config_path: str) -> "MLPConfig":
         ''' Loads a MLPConfig from a JSON file.
@@ -70,6 +76,9 @@ class MLP(nn.Module):
                 i == len(layer_sizes) - 2
             )
             self.layers.append(layer_block)
+            
+        # The output of the model is going to be of shape (batch_size, 50) where each row is the predicted logits for each class.
+        # Note: We do NOT apply softmax here because nn.CrossEntropyLoss expects raw logits and applies log-softmax internally.
 
             
     def _create_layer_block(self, input_size: int, output_size: int, is_output_layer: bool = False):
@@ -84,9 +93,12 @@ class MLP(nn.Module):
         layers.append(nn.Linear(input_size, output_size))
         
         if not is_output_layer:
-            if self.config.use_batch_norm:
+            if self.config.use_batch_norm and not self.config.use_layer_norm:
                 layers.append(nn.BatchNorm1d(output_size))
-            
+            elif self.config.use_layer_norm:
+                layers.append(nn.LayerNorm(output_size))
+            else:
+                raise ValueError("Invalid combination of batch norm and layer norm")
             
             activation_fn = {
                 "relu": nn.ReLU(),
@@ -153,7 +165,12 @@ class MLPTrainer:
         else:
             raise ValueError(f"Invalid optimizer: {config.optimizer}")
         
-        self.criterion = nn.CrossEntropyLoss()
+        self.criterion = nn.CrossEntropyLoss(label_smoothing=config.label_smoothing)
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            self.optimizer,
+            T_max=config.num_epochs,
+            eta_min=config.learning_rate * 0.01
+        )
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         torch.manual_seed(config.random_seed)
         if self.device.type == "cuda":
@@ -186,7 +203,12 @@ class MLPTrainer:
         X_train = X[train_indices]
         
         # Fit scaler ONLY on training data
-        self.scaler = StandardScaler()
+        self.scaler = {
+            'standard': StandardScaler(),
+            'minmax': MinMaxScaler(),
+            'l2': Normalizer(norm='l2')
+        }[self.config.scaler]
+        
         X_train_scaled = self.scaler.fit_transform(X_train)
         
         # Transform validation data using training statistics
@@ -213,6 +235,33 @@ class MLPTrainer:
             batch_size=self.config.batch_size,
             shuffle=False
         )
+    
+    def setup_full_dataloader(self, X: np.ndarray, y: np.ndarray):
+        '''Sets up a dataloader for the entire dataset (no train/val split).'''
+        # Scale the entire dataset
+        self.scaler = {
+            'standard': StandardScaler(),
+            'minmax': MinMaxScaler(),
+            'l2': Normalizer(norm='l2')
+        }[self.config.scaler]
+        
+        X_scaled = self.scaler.fit_transform(X)
+        
+        # Create tensors
+        X_tensor = torch.tensor(X_scaled, dtype=torch.float32).to(self.device)
+        y_tensor = torch.tensor(y, dtype=torch.long).to(self.device)
+        
+        # Create dataset and dataloader
+        full_dataset = torch.utils.data.TensorDataset(X_tensor, y_tensor)
+        
+        self.train_loader = torch.utils.data.DataLoader(
+            full_dataset,
+            batch_size=self.config.batch_size,
+            shuffle=True
+        )
+        
+        # No validation loader needed
+        self.val_loader = None
         
     def train_epoch(self) -> Dict[str, float]:
         '''Trains the model for one epoch.'''
@@ -295,7 +344,7 @@ class MLPTrainer:
             'precision': np.mean(precision),
             'recall': np.mean(recall),
             'f1_score': np.mean(f1_score)
-        }
+        }, all_preds, all_targets
         
     def plot_stats(train_stats_lists: List[Dict[str, float]], val_stats_lists: List[Dict[str, float]]):
         '''Plots the training and validation statistics.'''
@@ -311,6 +360,26 @@ class MLPTrainer:
         plt.show()
         plt.close()
         
+    def plot_confusion_matrix(self, preds: np.ndarray, targets: np.ndarray):
+        '''Plots the confusion matrix'''
+        
+        cm = confusion_matrix(targets, preds)
+        
+        plt.figure(figsize=(24, 16))
+        sns.heatmap(
+            cm,
+            annot=True,
+            fmt='d',
+            cmap='Blues',
+            xticklabels=range(self.config.output_size),
+            yticklabels=range(self.config.output_size)
+        )
+        plt.xlabel('Predicted')
+        plt.ylabel('True')
+        plt.title('Confusion Matrix')
+        plt.show()
+        plt.close()
+        
     def train(self) -> Tuple[List[Dict[str, float]], List[Dict[str, float]], str]:
         
         '''Trains the model on the training data.'''
@@ -322,9 +391,13 @@ class MLPTrainer:
         num_increasing_loss_epochs = 0
         
         train_stats_lists, val_stats_lists = [], []
+        best_val_preds, best_val_targets = [], []
         for epoch in range(self.config.num_epochs):
             train_stats = self.train_epoch()
-            val_stats = self.validate_epoch()
+            # Decaying the learning rate is done automatically by the scheduler.
+            print(f"Learning rate: {self.scheduler.get_last_lr()[0]:.6f}")
+            self.scheduler.step()
+            val_stats, val_preds, val_targets = self.validate_epoch()
             
             train_stats_lists.append(train_stats)
             val_stats_lists.append(val_stats)
@@ -341,10 +414,12 @@ class MLPTrainer:
                 best_loss = val_stats['loss']
                 best_model_path = f"{self.config.model_dir}/mlp_model_best.pth"
                 self.model.save_model(best_model_path)
+                best_val_preds = val_preds
+                best_val_targets = val_targets
                 num_increasing_loss_epochs = 0
             else:
                 num_increasing_loss_epochs += 1
-                if num_increasing_loss_epochs > 5:
+                if num_increasing_loss_epochs > self.config.max_increasing_loss_epochs:
                     print(f"Stopping early because of {num_increasing_loss_epochs} epochs of increasing validation loss")
                     break
                 
@@ -355,5 +430,78 @@ class MLPTrainer:
                 
         
         MLPTrainer.plot_stats(train_stats_lists, val_stats_lists)
+        self.plot_confusion_matrix(best_val_preds, best_val_targets)
         return train_stats_lists, val_stats_lists, best_model_path
         
+    def train_full_dataset(self, num_epochs: int) -> str:
+        '''Trains the model on the entire dataset for a specified number of epochs.
+        
+        Args:
+            num_epochs: Number of epochs to train (not from config)
+        
+        Returns:
+            Path to the saved model
+        '''
+        # Reset the scheduler for the new number of epochs
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            self.optimizer,
+            T_max=num_epochs,
+            eta_min=self.config.learning_rate * 0.01
+        )
+        
+        train_stats_lists = []
+        
+        for epoch in range(num_epochs):
+            train_stats = self.train_epoch()
+            print(f"Learning rate: {self.scheduler.get_last_lr()[0]:.6f}")
+            self.scheduler.step()
+            
+            train_stats_lists.append(train_stats)
+            
+            print(f"Epoch {epoch+1}/{num_epochs}")
+            
+            if epoch % 5 == 0:
+                stats = pd.DataFrame([train_stats], index=["Train"])
+                print(stats)
+        
+        # Save the final model
+        model_path = f"{self.config.model_dir}/mlp_model_full_dataset.pth"
+        self.model.save_model(model_path)
+        print(f"Model saved to {model_path}")
+        
+        return model_path
+    
+    def test(self, X: np.ndarray, ids: np.ndarray = None) -> pd.DataFrame:
+        '''Tests the model on the test data.
+        
+        Args:
+            X: Test features (should already be scaled if scaler was fitted)
+            ids: Optional array of IDs for the test samples. If None, uses range(len(X))
+        
+        Returns:
+            DataFrame with predictions
+        '''
+        self.model.eval()
+        
+        # Scale the test data using the same scaler from training
+        if hasattr(self, 'scaler') and self.scaler is not None:
+            X_scaled = self.scaler.transform(X)
+        else:
+            X_scaled = X
+        
+        X_tensor = torch.tensor(X_scaled, dtype=torch.float32).to(self.device)
+        with torch.no_grad():
+            outputs = self.model(X_tensor)
+            _, predicted = torch.max(outputs.data, 1)
+            predicted = predicted.cpu().numpy()
+            
+            # Create DataFrame with IDs and predictions
+            if ids is None:
+                ids = np.arange(len(predicted))
+            
+            result_df = pd.DataFrame({
+                'id': ids,
+                'label': predicted
+            })
+            result_df.to_csv(self.config.test_predictions_file, index=False)
+            return result_df
