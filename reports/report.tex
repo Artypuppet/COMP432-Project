@@ -29,7 +29,7 @@ The label distribution is balanced, with each class having approximately 2308 sa
     \label{fig:label_distribution}
 \end{figure}
 \subsubsection{Feature Distribution}
-The features are very sparse, with most features mean sparsity of 85.12\%. A plot of the feature distribution is shown in Figure \ref{fig:feature_distribution}. The reason for the sparsity is probably because the output of the CNN model was passed through ReLU activation function, which zeroed out most of the values.
+The features are very sparse (meaning $f_i = 0$ for feature $i$), because across all features mean sparsity is 85.12\%. A plot of the feature distribution is shown in Figure \ref{fig:feature_distribution}. The reason for the sparsity is probably because the output of the CNN model was passed through ReLU activation function, which zeroed out most of the values.
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.5\textwidth]{figures/feature_distributions.png}
@@ -37,7 +37,7 @@ The features are very sparse, with most features mean sparsity of 85.12\%. A plo
     \label{fig:feature_distribution}
 \end{figure}
 \subsubsection{Feature Correlation}
-The features have little correlation with each other, as shown in figure \ref{fig:correlation_heatmap}.
+The features have little correlation with each other, as shown in figure \ref{fig:correlation_heatmap} which plots correlation between the first 100 features.
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.5\textwidth]{figures/correlation_heatmap.png}
@@ -45,7 +45,7 @@ The features have little correlation with each other, as shown in figure \ref{fi
     \label{fig:correlation_heatmap}
 \end{figure}
 
-This lines up with our expectations, as the features were extracted from a CNN model trained on the image dataset.
+This makes sense, as the features were extracted from a CNN model trained on the image dataset and the CNN model is expected to extract features that are not correlated with each other.
 
 
 \section{Model Architecture and Training}
@@ -53,12 +53,13 @@ This lines up with our expectations, as the features were extracted from a CNN m
 
 
 \subsection{Data Preprocessing}
-We used L2 normalization to scale the data. We also tried StandardScaler and MinMaxScaler, but they very marginally worse than L2 normalization so we stuck with L2 normalization. I think the reason for the marginal difference is that the data is already very sparse and the scaling doesn't really affect it much. 
+L2 normalization was used to scale the data. StandardScaler and MinMaxScaler were also tried, but they were marginally worse than L2 normalization. The reason for the marginal difference is probably because the data is already very sparse and the scaling doesn't really affect it much. 
 
 \subsection{Architecture Details}
 
-We build an ensemble of five 2-layer MLP models, each trained on a different fold of the dataset. We then average the predictions of the 5 models to get the final prediction.
-Each model takes in the 500 input features and outputs predictions for all the 50 classes. The architecture consists of two hidden layers, each containing 4096 units, resulting in a [500 -\> 4096 -\> 4096 -\> 50] network structure. Each layer follows the composition: Linear transformation -\> LayerNorm normalization -\> GELU activation -\> Dropout (rate=0.4). We experimented with ReLU and Leaky ReLU activations, as well as BatchNorm normalization, but found that GELU combined with LayerNorm provided the best performance. The model architecture is illustrated in Figures \ref{fig:model_architecture_0} and \ref{fig:model_architecture_1}. The first figure shows the architecture of the input and first hidden layer block, and the second figure shows the architecture of the second hidden layer block and output layer in the ensemble. The \textbf{Gemm} layer is the linear transformation layer. And the \textbf{Div}, \textbf{Erf}, \textbf{Add} and \textbf{Mul} is the GELU activation layer but PyTorch has expanded the GELU activation function into these four layers.
+An ensemble of five 2-layer MLP models, each trained on a different fold of the dataset (used stratified k-fold cross-validation from scikit-learn) is built. The outputs logits from each model in the ensemble is averaged and passed through a softmax function to get the final predictions.
+
+Each model takes in the 500 input features and outputs predictions for all the 50 classes. The architecture consists of two hidden layers, each containing 4096 units, resulting in a [500 $->$ 4096 $->$ 4096 $->$ 50] network structure. Each layer block follows the composition: Linear transformation $->$ LayerNorm normalization $->$ GELU activation $->$ Dropout (rate=0.4). ReLU and Leaky ReLU activations, as well as BatchNorm normalization, were employed as well, but GELU combined with LayerNorm provided the best performance. The model architecture is illustrated in Figures \ref{fig:model_architecture_0} and \ref{fig:model_architecture_1}. The first figure shows the architecture of the input and first hidden layer block, and the second figure shows the architecture of the second hidden layer block and output layer in the ensemble. The \textbf{Gemm} layer is the linear transformation layer. And the \textbf{Div}, \textbf{Erf}, \textbf{Add} and \textbf{Mul} is the GELU activation layer but PyTorch has expanded the GELU activation function into these four layers for optimization reasons.
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.5\textwidth, height=1\textheight]{figures/ensemble_mlp_fold_0_architecture_part1.png}
@@ -74,11 +75,11 @@ Each model takes in the 500 input features and outputs predictions for all the 5
 
 
 \subsection{Training Methodology and Optimization Techniques}
-We began our training process with single models to establish a baseline and determine optimal training duration. For our initial submissions, we first trained a single model using an 80\% training and 20\% validation split to find the number of epochs required to reach the best validation loss. We then trained a new model from scratch for that number of epochs, but this time on the full training dataset without a validation split. This approach allowed us to use all available training data for the final model while using the validation split to determine the optimal stopping point.
+Initially single models were trained to establish a baseline and determine optimal training duration. For our initial submissions, a single model was trained using an 80\% training and 20\% validation split to find the number of epochs required to reach the best validation loss. Then a new model was trained from scratch for that number of epochs, but this time on the full training dataset without a validation split. This approach allowed all available training data to be used for the final model while using the validation split to determine the optimal stopping point.
 
-Subsequently, we built an ensemble of 5 models, each trained on a different fold of the dataset. The basic training loop remained the same for both single models and ensemble models: each model is trained separately using the same hyperparameters (except the seed) and training procedure. For the ensemble, we split the dataset into 5 folds, and each model is trained on 80\% of the data (its training fold) with 20\% held out for validation. Importantly, we did not retrain each model in the ensemble on the full training dataset. Instead, each model was trained only on its own training split. This approach ensures that the models are generalizable and do not overfit to the training data, while the ensemble averaging provides robustness through model diversity.
+Subsequently, an ensemble of 5 models, each trained on a different fold of the dataset was built. The basic training loop remained the same for both single and ensemble models. Each individual model in the ensemble is trained separately using the same hyperparameters (except the seed) and training procedure, and the dataset was split into 5 folds, and with each model being trained on 80\% of the data (its training fold) with 20\% held out for validation. Importantly, each model was trained only on its own training split. This approach ensures that the models are generalizable and do not overfit to the training data, while the ensemble averaging provides robustness through model diversity.
 
-We train each model separately using CrossEntropyLoss with label smoothing (0.05) to reduce overconfidence and improve generalization. The model was optimized using AdamW with a learning rate and weight decay of 0.0005, and the learning rate was scheduled using CosineAnnealingLR to decay the learning rate smoothly to 0 to prevent overfitting but still train the model for a longer time. Training was performed with a batch size of 512 for up to 75 epochs, with early stopping triggered if the validation loss failed to improve for 10 consecutive epochs. The hyperparameters used for training are summarized in Table \ref{tab:hyperparameters}.
+CrossEntropyLoss with label smoothing (0.05) was used to reduce overconfidence and improve generalization. The model was optimized using AdamW with a learning rate and weight decay of 0.0005, and the learning rate was scheduled using CosineAnnealingLR to decay the learning rate smoothly to 0 to prevent overfitting but still train the model for a longer time. Training was performed with a batch size of 512 for up to 75 epochs, with early stopping triggered if the validation loss failed to improve for 10 consecutive epochs. The hyperparameters used for training are summarized in Table \ref{tab:hyperparameters}.
 
 \begin{table}[H]
     \centering
@@ -119,7 +120,7 @@ We train each model separately using CrossEntropyLoss with label smoothing (0.05
 \section{Evaluation}
 
 \subsection{Metrics}
-We evaluated our model using multiple metrics to comprehensively assess performance across all 50 classes:
+Each model was evaluated using multiple metrics to comprehensively assess performance across all 50 classes:
 
 \begin{itemize}
     \item \textbf{Classification Accuracy}: 
@@ -160,7 +161,7 @@ The training and validation loss for the first model in the Ensemble MLP is show
 \end{figure}
 
 \subsection{Model Performance}
-Our final ensemble model achieved approximately 78\% validation accuracy with a validation loss of 1.23. The individual models in the ensemble achieved approximately 78\% +- 1\% accuracy with similar precision, recall and F1-scores on the validation set. The macro-averaged precision, recall, and F1-score on the validation set were 78.16\%, 0.7815\%, and 78.05\% respectively, showing balanced performance across all metrics. This is despite the fact that it overfit on the training data (100\% training accuracy) it maintained a validation accuracy of 78.08\%, indicating that our regularization efforts helped it generalize on the unseen data despite the large capacity of the network.
+Each model in the ensemble achieved approximately 78\% +- 1\% accuracy with similar precision, recall and F1-scores on the validation set. The macro-averaged precision, recall, and F1-score on the validation set were 78.16\%, 0.7815\%, and 78.05\% respectively, showing balanced performance across all metrics. This is despite the fact that it overfit on the training data (100\% training accuracy) it was still able to maintain a validation accuracy of 78.08\%, indicating that our regularization efforts helped it generalize on the unseen data despite the large capacity of the network.
 
 Table \ref{tab:kaggle_submissions} summarizes the results of all our Kaggle submissions.
 
@@ -206,16 +207,16 @@ The introduction of label smoothing (0.05) significantly reduced this contiguous
 \subsection{Architecture Experiments}
 We experimented a lot with various architectures, including different depths, layer widths, activation functions, and regularization techniques. We began with a deep funnel architecture [2048, 1024, 512, 256, 128, 64] using ReLU activation, which achieved high training accuracy (83.7\%) but only 57-60\% validation accuracy, indicating severe overfitting. The large training-validation gap suggested the deep architecture was memorizing patterns rather than learning generalizable features.
 
-We first explored activation functions, finding that Leaky ReLU provided slight improvement (59\%) over ReLU, while GELU demonstrated superior performance. Transitioning to GELU improved validation accuracy to approximately 60\%, and further improvements to 70\% were achieved through layer normalization, increased dropout (0.2 to 0.4), and label smoothing.
+We first explored activation functions, finding that Leaky ReLU provided slight improvement (59\%) over ReLU, while GELU demonstrated superior performance. Transitioning to GELU improved validation accuracy to approximately 60\%, and further improvements to 70\% were achieved through layer normalization, increased dropout (0.2 to 0.4), and label smoothing. The reason why GELU performed better is because it is a smooth activation function and outputs non-zero values for inputs less than 0, which probably helped during the training process as the features were very sparse.
 
-After this we explored using shallower architectures while increasing layer width. We systematically explored wider layers: [3072, 3072, 2048, 1536] achieved 75\% validation accuracy, [4096, 2048] achieved 77.6\%, and [4096, 4096] achieved the best performance at 78.08\% validation accuracy. This means that increasing the layer width is more effective than increasing the depth for this task. We also tired adding one extra layer to the architecture but it didn't improve the performance at all and increased the training time significantly.
+After this we explored using shallower architectures while increasing layer width. We explored wider layers: [3072, 3072, 2048, 1536] achieved 75\% validation accuracy, [4096, 2048] achieved 77.6\%, and [4096, 4096] achieved the best performance at 78.08\% validation accuracy. This means that increasing the layer width is more effective than increasing the depth for this task. We also tried adding one extra layer to the architecture but it didn't improve the performance at all and increased the training time significantly.
 
-We also tuned regularization hyperparameters: label smoothing was optimized from 0.0 to 0.1, and finally to 0.05 for optimal performance; weight decay was increased from 0 to 1e-4, and finally to 5e-4; and normalization was changed from BatchNorm to LayerNorm, which proved more suitable for the sparse input features and provided more stable training dynamics. The final 2-layer architecture [4096, 4096] with GELU activation, LayerNorm, and dropout rate of 0.4 balances capacity with generalization, achieving 78\% validation accuracy while maintaining a reasonable training-validation gap.
+We also tuned regularization hyperparameters: label smoothing was optimized from 0.0 to 0.1, and finally to 0.05 for optimal performance; weight decay was increased from 0 to 1e-4, and finally to 5e-4; and normalization was changed from BatchNorm to LayerNorm for slightly better performance.
 
 \section{Summary and Conclusions}
 Our best performing model is a 2-layer MLP ensemble with architecture [4096, 4096] using GELU activation, LayerNorm normalization, and dropout rate of 0.4. The ensemble consists of 5 models trained on different folds, with predictions averaged for final classification.
 
-We found that shallower, wider networks performed significantly better than deeper networks for this task. The optimal 2-layer architecture [4096, 4096] achieved 78\% validation accuracy, compared to 57-60\% for deeper funnel architectures. GELU activation proved superior to ReLU and Leaky ReLU, and label smoothing (0.05) effectively reduced contiguous class confusion patterns. Layer normalization proved to be slightly better than batch normalization for the sparse feature space, and data scaling had minimal impact.
+We found that shallower, wider networks performed significantly better than deeper networks for this task. The optimal 2-layer architecture [4096, 4096] achieved 78\% validation accuracy, compared to 57-60\% for deeper funnel architectures. GELU activation proved superior to ReLU and Leaky ReLU, and label smoothing (0.05) effectively reduced contiguous class confusion patterns.
 
 The final ensemble model achieved approximately 78\% validation accuracy with balanced precision, recall, and F1-score (all around 0.78). On the Kaggle competition test set, the ensemble achieved a score of 0.827, which was our best result.
 \end{document}
