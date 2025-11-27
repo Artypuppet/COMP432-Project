@@ -14,9 +14,6 @@ models/*
 submissions/*
 !submissions/.gitkeep
 
-# Reports/Figures - ignore contents but keep directory
-reports/figures/*
-!reports/figures/.gitkeep
 
 # Python
 __pycache__/
@@ -60,3 +57,13 @@ Thumbs.db
 *.log
 logs/
 
+# latex build
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.synctex.gz
+*.toc
+*.out
+*.blg
+*.bbl

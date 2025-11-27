@@ -216,14 +216,7 @@ class EnsembleMLP:
             # Scale test data using the scaler from this fold's trainer
             # Note: Each trainer has its own scaler fitted on its training fold
             # If scalers are not fitted (e.g., after load_models()), this will raise an error
-            try:
-                X_scaled = trainer.scaler.transform(X)
-            except (AttributeError, ValueError) as e:
-                raise ValueError(
-                    f"Scaler for fold {fold_idx + 1} is not fitted. "
-                    f"Please train the ensemble first (train() sets up scalers), "
-                    f"or refit scalers using training data if loading pre-trained models."
-                ) from e
+            X_scaled = trainer.scaler.transform(X)
             X_tensor = torch.tensor(X_scaled, dtype=torch.float32).to(self.device)
             
             with torch.no_grad():

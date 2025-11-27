@@ -130,12 +130,23 @@ class MLP(nn.Module):
 
     def save_model(self, model_path: str):
         ''' Saves the model to a file'''
-        torch.save(self.state_dict(), model_path)   
+        torch.save(self.state_dict(), model_path)
+    
+    def save_model_onnx(self, model_path: str):
+        ''' Saves the model to a file in ONNX format'''
+        torch.onnx.export(
+            self,
+            torch.randn(1, self.config.input_size),
+            model_path, 
+            verbose=True,
+            input_names=['input_features'],
+            output_names=['output_logits'],
+            do_constant_folding=False
+        )
     
     def load_model(self, model_path: str):
-        ''' Loads the model from a file'''
+        ''' Loads the model from a file in PyTorch format'''
         self.load_state_dict(torch.load(model_path))
-
 
 
 class MLPTrainer:
