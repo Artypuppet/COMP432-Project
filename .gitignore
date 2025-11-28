@@ -10,9 +10,6 @@ data/processed/*
 models/*
 !models/.gitkeep
 
-# Submissions - ignore contents but keep directory
-submissions/*
-!submissions/.gitkeep
 
 
 # Python

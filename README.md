@@ -43,12 +43,11 @@ This project is for a Kaggle competition focused on classifying images of 50 dif
 │   ├── interim/      <- Intermediate data transformations
 │   └── processed/    <- Final features ready for modeling
 ├── models/           <- Trained model checkpoints
-├── notebooks/        <- Jupyter notebooks for exploration
+├── notebooks/        <- Jupyter notebooks for exploration and python modules for reusable code
 ├── configs/          <- Hyperparameter configuration files (YAML/JSON)
 ├── submissions/      <- Kaggle submission CSV files
 ├── reports/          <- Generated outputs and analysis
 │   └── figures/      <- Plots and visualizations
-└── src/              <- Reusable Python modules
 ```
 
 ## Setup Instructions

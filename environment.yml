@@ -1,6 +1,8 @@
 name: comp432-project
 channels:
   - conda-forge
+  - pytorch
+  - nvidia
   - defaults
 dependencies:
   - python=3.11
@@ -12,6 +14,8 @@ dependencies:
   - jupyter
   - ipykernel
   - kaggle
+  - onnx
+  - jupyterlab
 
   # PyTorch and GPU Support
   # IMPORTANT: Install PyTorch manually after creating the environment

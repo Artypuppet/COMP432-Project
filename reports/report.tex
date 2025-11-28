@@ -3,6 +3,7 @@
 \usepackage{graphicx} % Required for inserting images
 \usepackage{float}
 \usepackage{caption}
+\usepackage{url}
 
 \title{COMP432 Project Report}
 \author{Jaspreet Singh (40259729), Evan Teboul (40238390), Kevin Courey (40245966)}
@@ -51,15 +52,14 @@ This makes sense, as the features were extracted from a CNN model trained on the
 \section{Model Architecture and Training}
 
 
-
 \subsection{Data Preprocessing}
 L2 normalization was used to scale the data. StandardScaler and MinMaxScaler were also tried, but they were marginally worse than L2 normalization. The reason for the marginal difference is probably because the data is already very sparse and the scaling doesn't really affect it much. 
 
 \subsection{Architecture Details}
 
-An ensemble of five 2-layer MLP models, each trained on a different fold of the dataset (used stratified k-fold cross-validation from scikit-learn) is built. The outputs logits from each model in the ensemble is averaged and passed through a softmax function to get the final predictions.
+An ensemble of five 2-layer MLP models, each trained on a different fold of the dataset (used stratified k-fold cross-validation from scikit-learn~\cite{scikit-learn}) is built. The outputs logits from each model in the ensemble is averaged and passed through a softmax function to get the final predictions.
 
-Each model takes in the 500 input features and outputs predictions for all the 50 classes. The architecture consists of two hidden layers, each containing 4096 units, resulting in a [500 $->$ 4096 $->$ 4096 $->$ 50] network structure. Each layer block follows the composition: Linear transformation $->$ LayerNorm normalization $->$ GELU activation $->$ Dropout (rate=0.4). ReLU and Leaky ReLU activations, as well as BatchNorm normalization, were employed as well, but GELU combined with LayerNorm provided the best performance. The model architecture is illustrated in Figures \ref{fig:model_architecture_0} and \ref{fig:model_architecture_1}. The first figure shows the architecture of the input and first hidden layer block, and the second figure shows the architecture of the second hidden layer block and output layer in the ensemble. The \textbf{Gemm} layer is the linear transformation layer. And the \textbf{Div}, \textbf{Erf}, \textbf{Add} and \textbf{Mul} is the GELU activation layer but PyTorch has expanded the GELU activation function into these four layers for optimization reasons.
+Each model takes in the 500 input features and outputs predictions for all the 50 classes. The architecture consists of two hidden layers, each containing 4096 units, resulting in a [500 $->$ 4096 $->$ 4096 $->$ 50] network structure. Each layer block follows the composition: Linear transformation $->$ LayerNorm~\cite{pytorch-layernorm} normalization $->$ GELU~\cite{pytorch-gelu} activation $->$ Dropout~\cite{pytorch-dropout} (rate=0.4). ReLU and Leaky ReLU activations, as well as BatchNorm~\cite{pytorch-batchnorm} normalization, were employed as well, but GELU combined with LayerNorm provided the best performance. The model architecture is illustrated in Figures \ref{fig:model_architecture_0} and \ref{fig:model_architecture_1}. The first figure shows the architecture of the input and first hidden layer block, and the second figure shows the architecture of the second hidden layer block and output layer in the ensemble. The \textbf{Gemm} layer is the linear transformation layer. And the \textbf{Div}, \textbf{Erf}, \textbf{Add} and \textbf{Mul} is the GELU activation layer but PyTorch has expanded the GELU activation function into these four layers for optimization reasons.
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.5\textwidth, height=1\textheight]{figures/ensemble_mlp_fold_0_architecture_part1.png}
@@ -79,7 +79,7 @@ Initially single models were trained to establish a baseline and determine optim
 
 Subsequently, an ensemble of 5 models, each trained on a different fold of the dataset was built. The basic training loop remained the same for both single and ensemble models. Each individual model in the ensemble is trained separately using the same hyperparameters (except the seed) and training procedure, and the dataset was split into 5 folds, and with each model being trained on 80\% of the data (its training fold) with 20\% held out for validation. Importantly, each model was trained only on its own training split. This approach ensures that the models are generalizable and do not overfit to the training data, while the ensemble averaging provides robustness through model diversity.
 
-CrossEntropyLoss with label smoothing (0.05) was used to reduce overconfidence and improve generalization. The model was optimized using AdamW with a learning rate and weight decay of 0.0005, and the learning rate was scheduled using CosineAnnealingLR to decay the learning rate smoothly to 0 to prevent overfitting but still train the model for a longer time. Training was performed with a batch size of 512 for up to 75 epochs, with early stopping triggered if the validation loss failed to improve for 10 consecutive epochs. The hyperparameters used for training are summarized in Table \ref{tab:hyperparameters}.
+CrossEntropyLoss with label smoothing (0.05)~\cite{pytorch-loss} was used to reduce overconfidence and improve generalization. The model was optimized using AdamW~\cite{pytorch-adamw} with a learning rate and weight decay of 0.0005, and the learning rate was scheduled using CosineAnnealingLR~\cite{pytorch-cosine} to decay the learning rate smoothly to 0 to prevent overfitting but still train the model for a longer time. Training was performed with a batch size of 512 for up to 75 epochs, with early stopping triggered if the validation loss failed to improve for 10 consecutive epochs. The hyperparameters used for training are summarized in Table \ref{tab:hyperparameters}.
 
 \begin{table}[H]
     \centering
@@ -161,7 +161,7 @@ The training and validation loss for the first model in the Ensemble MLP is show
 \end{figure}
 
 \subsection{Model Performance}
-Each model in the ensemble achieved approximately 78\% +- 1\% accuracy with similar precision, recall and F1-scores on the validation set. The macro-averaged precision, recall, and F1-score on the validation set were 78.16\%, 0.7815\%, and 78.05\% respectively, showing balanced performance across all metrics. This is despite the fact that it overfit on the training data (100\% training accuracy) it was still able to maintain a validation accuracy of 78.08\%, indicating that our regularization efforts helped it generalize on the unseen data despite the large capacity of the network.
+Each model in the ensemble achieved approximately 78\% +- 1\% accuracy with similar precision, recall and F1-scores on the validation set. The macro-averaged precision, recall, and F1-score on the validation set were 78.16\%, 78.15\%, and 78.05\% respectively, showing balanced performance across all metrics. This is despite the fact that it overfit on the training data (100\% training accuracy) it was still able to maintain a validation accuracy of 78.08\%, indicating that our regularization efforts helped it generalize on the unseen data despite the large capacity of the network.
 
 Table \ref{tab:kaggle_submissions} summarizes the results of all our Kaggle submissions.
 
@@ -219,4 +219,31 @@ Our best performing model is a 2-layer MLP ensemble with architecture [4096, 409
 We found that shallower, wider networks performed significantly better than deeper networks for this task. The optimal 2-layer architecture [4096, 4096] achieved 78\% validation accuracy, compared to 57-60\% for deeper funnel architectures. GELU activation proved superior to ReLU and Leaky ReLU, and label smoothing (0.05) effectively reduced contiguous class confusion patterns.
 
 The final ensemble model achieved approximately 78\% validation accuracy with balanced precision, recall, and F1-score (all around 0.78). On the Kaggle competition test set, the ensemble achieved a score of 0.827, which was our best result.
+
+\section{References}
+\begin{thebibliography}{00}
+\bibitem{pytorch-loss} PyTorch, ``CrossEntropyLoss,'' \textit{PyTorch Documentation}. [Online]. Available: \url{https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html}
+\bibitem{pytorch-adamw} PyTorch, ``AdamW,'' \textit{PyTorch Documentation}. [Online]. Available: \url{https://pytorch.org/docs/stable/generated/torch.optim.AdamW.html}
+\bibitem{pytorch-cosine} PyTorch, ``CosineAnnealingLR,'' \textit{PyTorch Documentation}. [Online]. Available: \url{https://pytorch.org/docs/stable/generated/torch.optim.lr_scheduler.CosineAnnealingLR.html}
+\bibitem{scikit-learn} Scikit-learn, ``Stratified K-Fold,'' \textit{Scikit-learn Documentation}. [Online]. Available: \url{https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.StratifiedKFold.html}
+\bibitem{pytorch-nn} PyTorch, ``Neural Network Layers,'' \textit{PyTorch Documentation}. [Online]. Available: \url{https://pytorch.org/docs/stable/nn.html}
+\bibitem{pytorch-layernorm} PyTorch, ``LayerNorm,'' \textit{PyTorch Documentation}. [Online]. Available: \url{https://pytorch.org/docs/stable/generated/torch.nn.LayerNorm.html}
+\bibitem{pytorch-gelu} PyTorch, ``GELU,'' \textit{PyTorch Documentation}. [Online]. Available: \url{https://pytorch.org/docs/stable/generated/torch.nn.GELU.html}
+\bibitem{pytorch-dropout} PyTorch, ``Dropout,'' \textit{PyTorch Documentation}. [Online]. Available: \url{https://pytorch.org/docs/stable/generated/torch.nn.Dropout.html}
+\bibitem{pytorch-batchnorm} PyTorch, ``BatchNorm1d,'' \textit{PyTorch Documentation}. [Online]. Available: \url{https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm1d.html}
+\end{thebibliography}
+
+
+\appendix
+
+We used ChatGPT to help us with generating comments for our code and refining the report.
+
+\section{ChatGPT Prompts}
+\begin{itemize}
+    \item \textbf{Generating comments for our code}:
+    \begin{verbatim}
+    Please generate comments for the following code:
+    \end{verbatim}
+    \item \textbf{Refining the report}: This generally involved making the report more concise and clear and helping with grammar and punctuation.
+\end{itemize}
 \end{document}
