@@ -8,8 +8,8 @@ This project is for a Kaggle competition focused on classifying images of 50 dif
 
 - **Task**: Multi-class classification (50 object classes)
 - **Dataset**: Pre-extracted deep learning features
-- **Training Set**: ~115,406 samples (70% of full dataset)
-- **Test Set**: ~49,460 samples (30% of full dataset)
+- **Training Set**: ~115,406 samples
+- **Test Set**: ~49,460 samples
 - **Evaluation Metric**: Classification accuracy
 - **Labels**: Integer values [0-49] representing 50 object classes
 
@@ -49,6 +49,32 @@ This project is for a Kaggle competition focused on classifying images of 50 dif
 ├── reports/          <- Generated outputs and analysis
 │   └── figures/      <- Plots and visualizations
 ```
+
+## Notebooks Directory
+
+The `notebooks/` directory contains both Jupyter notebooks for exploration and Python modules for reusable code. Below is a brief description of each file:
+
+### Python Modules
+
+- **`data_loader.py`**: Utility module for loading training and test data from CSV files. Provides functions to automatically detect the project root and load data with proper handling of ID columns. Includes `load_train_data()` and `load_test_data()` functions.
+
+- **`mlp_model.py`**: Main MLP model implementation using PyTorch. Contains the `MLPConfig` dataclass for hyperparameter configuration and the `MLPTrainer` class that handles model training, validation, and evaluation. Supports various activation functions (ReLU, Leaky ReLU, GELU), normalization layers (BatchNorm, LayerNorm), and regularization techniques.
+
+- **`ensemble_ml_model.py`**: Ensemble MLP implementation using stratified k-fold cross-validation. Builds multiple models on different data folds and combines their predictions through averaging. Contains the `EnsembleMLPConfig` class and `EnsembleMLPTrainer` for managing ensemble training.
+
+### Jupyter Notebooks
+
+- **`data_analysis.ipynb`**: Comprehensive exploratory data analysis (EDA) notebook. Analyzes label distribution, feature statistics, feature sparsity, and feature correlations. Generates visualizations including label distribution plots, feature distribution histograms, and correlation heatmaps saved to `reports/figures/`.
+
+- **`MLP_pytorch.ipynb`**: Main PyTorch training notebook for model development and experimentation. Contains the complete training pipeline, hyperparameter tuning experiments, and model evaluation. Includes code for generating confusion matrices, loss plots, and other performance visualizations.
+
+- **`MLP.ipynb`**: Simple NumPy-based MLP implementation from scratch (without PyTorch). Implements forward propagation with ReLU activation and softmax output layer. Useful for understanding the basic mechanics of multilayer perceptrons.
+
+- **`csv2matrix.ipynb`**: Simple utility notebook for converting CSV data files into NumPy matrices. Demonstrates basic data loading and conversion operations for quick data inspection.
+
+### Documentation
+
+- **`best_results.md`**: Documentation of best-performing hyperparameter configurations and their results. Contains JSON configuration examples for various model architectures and their validation accuracies, useful for reproducing best results.
 
 ## Setup Instructions
 
@@ -179,13 +205,19 @@ Or use JupyterLab:
 jupyter lab
 ```
 
-## Development Workflow
+### Training Models
 
-1. **Exploration**: Use Jupyter notebooks in `notebooks/` for data exploration and experimentation
-2. **Code**: As code stabilizes, refactor into reusable modules in `src/`
-3. **Training**: Develop training scripts using PyTorch
-4. **Evaluation**: Evaluate models and generate predictions
-5. **Submission**: Format predictions and submit to Kaggle
+To train the models, open and run all cells in the `notebooks/MLP_pytorch.ipynb` notebook. The notebook contains detailed comments and markdown cells that explain what each code cell does, including:
+
+- Loading the config file
+- Training one individual model using the `configs/mlp_config.json` and training the ensemble model using `configs/ensemble_config.json` file.
+- Model architecture configuration
+- Training loop implementation
+- Validation and evaluation procedures
+- Visualization of training metrics and results
+
+Simply execute all cells sequentially to train the model from scratch, or modify the configuration cells to experiment with different hyperparameters. But beware, it took around 45 minutes to run all the cells on a laptop with RTX 3050 so it may take longer.
+
 
 ## Notes
 
