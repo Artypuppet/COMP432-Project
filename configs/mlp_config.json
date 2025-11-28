@@ -1,0 +1,27 @@
+{
+    "input_size": 500,
+    "hidden_sizes": [
+        4096,
+        4096
+    ],
+    "output_size": 50,
+    "activation": "gelu",
+    "dropout_rate": 0.4,
+    "label_smoothing": 0.05,
+    "use_batch_norm": false,
+    "use_layer_norm": true,
+    "max_increasing_loss_epochs": 10,
+    "learning_rate": 0.0005,
+    "batch_size": 512,
+    "num_epochs": 75,
+    "weight_decay": 5e-4,
+    "optimizer": "adamw",
+    "data_dir": "raw",
+    "model_dir": "../models",
+    "train_file": "train.csv",
+    "test_file": "test.csv",
+    "test_predictions_file": "../submissions/test_predictions.csv",
+    "validation_split": 0.2,
+    "random_seed": 23,
+    "scaler": "l2"
+}

@@ -89,7 +89,7 @@ def load_train_data(data_path=None, data_dir="raw", filename=None, exclude_id=Tr
     return X, y
 
 
-def load_test_data(data_path=None, data_dir="raw", filename=None, exclude_id=True):
+def load_test_data(data_path=None, data_dir="raw", filename=None, exclude_id=True, return_ids=False):
     """
     Load test data from a CSV file.
     
@@ -101,9 +101,11 @@ def load_test_data(data_path=None, data_dir="raw", filename=None, exclude_id=Tru
         data_dir: Directory within data/ folder ("raw", "interim", or "processed")
         filename: Name of the CSV file (default: "test.csv")
         exclude_id: If True, exclude the id column from features (default: True)
+        return_ids: If True, also return the ID column as a separate array (default: False)
     
     Returns:
         X: NumPy array of shape (n_samples, n_features) containing features
+        ids: (optional) NumPy array of IDs if return_ids=True
     """
     # Determine the full path to the data file
     if data_path is None:
@@ -121,6 +123,11 @@ def load_test_data(data_path=None, data_dir="raw", filename=None, exclude_id=Tru
         if first_col_name == 'id' or first_col_name.startswith('id'):
             has_id = True
     
+    # Extract IDs if requested
+    ids = None
+    if return_ids and has_id:
+        ids = df.iloc[:, 0].values
+    
     # Extract features (X)
     # Test data has no label column, so we just need to handle the id column
     if exclude_id and has_id:
@@ -130,5 +137,7 @@ def load_test_data(data_path=None, data_dir="raw", filename=None, exclude_id=Tru
         # Include all columns (or no id column present)
         X = df.iloc[:, :].values
     
+    if return_ids:
+        return X, ids
     return X
 
