@@ -218,6 +218,20 @@ To train the models, open and run all cells in the `notebooks/MLP_pytorch.ipynb`
 
 Simply execute all cells sequentially to train the model from scratch, or modify the configuration cells to experiment with different hyperparameters. But beware, it took around 45 minutes to run all the cells on a laptop with RTX 3050 so it may take longer.
 
+### **Report**
+
+The final project report is located in the `reports/` directory. The Latex report file is `reports/report.tex` and a compiled PDF version is available at `reports/report.pdf`.
+
+**Viewing the Report:**
+- Simply open `reports/report.pdf` in any PDF viewer
+
+**Compiling the Report (if modifications are made):**
+If you need to recompile the LaTeX report after making changes, ensure you have a LaTeX distribution installed (e.g., TeX Live, MiKTeX) and run:
+
+```bash
+cd reports
+pdflatex report.tex
+```
 
 ## Notes
 
